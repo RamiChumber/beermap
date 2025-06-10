@@ -84,13 +84,13 @@ const App = () => {
             id="geojson-source" 
             shape={geojson} 
             onPress={(e) => {
-              const feature = e.features?.[0];
+              const feature = e.features?.[0].properties.name
               if (feature?.properties?.cluster) {
                 // Optional: Zoom into cluster
                 zoomInCluster(e.coordinates);
               } else {
-                console.log(e.features)
-                setSelectedFeature(feature);
+                console.log(feature)
+                //setSelectedFeature(feature);
               }
             }} 
             cluster={true} 
@@ -122,9 +122,9 @@ const App = () => {
         {selectedFeature && (
           <View style={styles.popup}>
             <Text style={{ fontWeight: 'bold' }}>
-              {selectedFeature.properties?.title}
+              {selectedFeature.properties?.name}
             </Text>
-            <Text>{selectedFeature.properties?.description}</Text>
+            <Text>{selectedFeature.properties?.outdoor_seating}</Text>
           </View>
         )}
       </View>
