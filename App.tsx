@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Dimensions, Text, Pressable } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { StyleSheet, View, Dimensions, Text, Pressable, Button } from "react-native";
 import Mapbox, { MapView, Camera, ShapeSource, CircleLayer, MarkerView } from "@rnmapbox/maps";
 import osloBarsJson from "./assets/oslo_bars.json";
 
@@ -34,9 +34,11 @@ const styles = StyleSheet.create({
   },
   popup: {
     position: "absolute",
-    bottom: 50,
-    left: 20,
-    right: 20,
+    width: 200,
+    height: 100,
+    bottom: 200,
+    left: 50,
+    right: 50,
     padding: 10,
     backgroundColor: "white",
     borderRadius: 10,
@@ -50,7 +52,12 @@ const styles = StyleSheet.create({
 
 
 const App = () => {
-  const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null); 
+  const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
+  const mapRef = useRef<Mapbox.MapView>(null);
+  const cameraRef = useRef<Mapbox.Camera>(null);
+
+
   
   useEffect(() => {
     Mapbox.setTelemetryEnabled(false);
@@ -68,29 +75,62 @@ const App = () => {
     <View style={styles.page}>
       <View style={styles.container}>
         <MapView
+          ref={mapRef}
           style={styles.map}
           styleURL="mapbox://styles/trucar/cmbfonisj006l01r03k4d03e7"
           compassEnabled
           compassFadeWhenNorth
+          onRegionIsChanging={() => {
+            setSelectedFeature(null);
+            setPopupPosition(null);
+          }}
+          onPress={() => {
+            setSelectedFeature(null);
+            setPopupPosition(null);
+          }}
         >
           
-          <Camera zoomLevel={12} centerCoordinate={[10.7522, 59.9139]} />
+          <Camera ref={cameraRef} zoomLevel={12} centerCoordinate={[10.7522, 59.9139]} />
 
           <ShapeSource 
-            id="geojson-source" 
-            shape={geojson} 
-            onPress={(e) => {
+            id="geojson-source"
+            shape={geojson}
+            cluster={true}
+            clusterRadius={50}
+            onPress={async (e) => {
               const feature = e.features?.[0];
               if (feature?.properties?.cluster) {
-                // Optional: Zoom into cluster
                 zoomInCluster(e.coordinates);
+                //cameraRef.current?.zoomTo(14, 500);
+                //cameraRef.current?.flyTo(e.coordinates, 300); // smooth animation (500ms)
               } else if (feature) {
-                setSelectedFeature(feature);
+                if (mapRef.current && feature.geometry.type === "Point") {
+                  const coords = feature.geometry.coordinates as [number, number];
+                  const offsetCoords: [number, number] = [coords[0], coords[1] - 0.003];
+                  cameraRef.current?.flyTo(offsetCoords, 300);
+                  // Move camera to center on the bar
+                  
+
+                  setTimeout(async () => {
+                    if (mapRef.current) {
+                      const screenPoint = await mapRef.current.getPointInView(coords);
+                      console.log(screenPoint)
+                      const [x, y] = screenPoint as [number, number];
+                      setPopupPosition({ x, y });
+                      setSelectedFeature(feature);
+                    }
+                  }, 350); // matches camera animation time
+                  
+                  //const screenPoint = await mapRef.current.getPointInView(coords);
+                  //const [x, y] = screenPoint as [number, number];
+
+                  //setPopupPosition({ x, y });
+                }
               }
-            }} 
-            cluster={true} 
-            clusterRadius={1}
-            >
+            }}
+
+            hitbox={{ width: 20, height: 20 }}
+          >
             <CircleLayer
               id="unclusteredPoints"
               filter={['!', ['has', 'point_count']]} // show only unclustered points
@@ -112,25 +152,31 @@ const App = () => {
           </ShapeSource>
         </MapView>
 
-        {selectedFeature && selectedFeature.geometry.type === "Point" && (
-          <MarkerView
-            id="popup-marker"
-            coordinate={selectedFeature.geometry.coordinates}
-            anchor={{ x: 0.5, y: 1 }} // adjust to position above the point
-          >
-            <View style={styles.popup}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ fontWeight: "bold", flex: 1 }}>
-                  {selectedFeature.properties?.name}
-                </Text>
-                <Pressable onPress={() => setSelectedFeature(null)}>
-                  <Text style={{ fontWeight: "bold" }}>✕</Text>
-                </Pressable>
-              </View>
-              <Text>{selectedFeature.properties?.outdoor_seating}</Text>
-            </View>
-          </MarkerView>
-        )}
+        {popupPosition && selectedFeature && (
+        <View
+          style={[
+            styles.popup,
+            {
+              position: "absolute",
+              left: popupPosition.x - 100, // adjust for width
+              top: popupPosition.y - 120,  // adjust for height
+            },
+          ]}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ fontWeight: "bold", flex: 1 }}>
+              {selectedFeature.properties?.name}
+            </Text>
+            
+              <Button onPress={() => {
+                setSelectedFeature(null);
+                setPopupPosition(null);
+              }} title="X"/>
+            
+          </View>
+          <Text>{selectedFeature.properties?.outdoor_seating}</Text>
+        </View>
+      )}
       </View>
     </View>
   );
@@ -138,4 +184,5 @@ const App = () => {
 
 export default App;
 
-// next: try to add the oslo bars geojson with clustering.
+// Add scalable offset when pressing a bar, add zoom when pressing a cluster, add a more button effect to the x on the popup.
+// <Text style={{ fontWeight: "bold" }}>✕</Text>
