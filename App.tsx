@@ -3,12 +3,6 @@ import { StyleSheet, View, Dimensions, Text, Pressable, Button } from "react-nat
 import Mapbox, { MapView, Camera, ShapeSource, CircleLayer, MarkerView } from "@rnmapbox/maps";
 import osloBarsJson from "./assets/oslo_bars.json";
 
-
-
-// Replace with your Mapbox access token
-//oslo
-// <Camera zoomLevel={12} centerCoordinate={[10.7522, 59.9139]} />
-
 Mapbox.setAccessToken("pk.eyJ1IjoidHJ1Y2FyIiwiYSI6ImNtYmF4eW1kejBrbngyanNiMDV6cmhkZGUifQ.XDN6-TsN4oQ8jhiwd1Oguw");
 
 const windowWidth = Dimensions.get("window").width;
@@ -56,6 +50,8 @@ const App = () => {
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
   const mapRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const [currentZoom, setCurrentZoom] = useState<number>(12);
+
 
 
   
@@ -68,8 +64,6 @@ const App = () => {
     
   }
 
-  
-  //console.log(geojson)
 
   return (
     <View style={styles.page}>
@@ -83,6 +77,9 @@ const App = () => {
           onRegionIsChanging={() => {
             setSelectedFeature(null);
             setPopupPosition(null);
+          }}
+          onRegionDidChange={(region) => {
+            setCurrentZoom(region.properties.zoomLevel);
           }}
           onPress={() => {
             setSelectedFeature(null);
@@ -99,22 +96,24 @@ const App = () => {
             clusterRadius={50}
             onPress={async (e) => {
               const feature = e.features?.[0];
+              const coords: [number, number] = [e.coordinates.longitude, e.coordinates.latitude];
               if (feature?.properties?.cluster) {
                 zoomInCluster(e.coordinates);
-                //cameraRef.current?.zoomTo(14, 500);
-                //cameraRef.current?.flyTo(e.coordinates, 300); // smooth animation (500ms)
+                const newZoom = Math.min(currentZoom + 2, 20);
+                cameraRef.current?.setCamera({
+                  centerCoordinate: coords,
+                  zoomLevel: newZoom,
+                  animationDuration: 400,
+                  animationMode: "flyTo",
+                });
+                
               } else if (feature) {
                 if (mapRef.current && feature.geometry.type === "Point") {
-                  const coords = feature.geometry.coordinates as [number, number];
-                  const offsetCoords: [number, number] = [coords[0], coords[1] - 0.003];
-                  cameraRef.current?.flyTo(offsetCoords, 300);
-                  // Move camera to center on the bar
-                  
+                  cameraRef.current?.flyTo(coords, 300);
 
                   setTimeout(async () => {
                     if (mapRef.current) {
                       const screenPoint = await mapRef.current.getPointInView(coords);
-                      console.log(screenPoint)
                       const [x, y] = screenPoint as [number, number];
                       setPopupPosition({ x, y });
                       setSelectedFeature(feature);
@@ -183,6 +182,3 @@ const App = () => {
 };
 
 export default App;
-
-// Add scalable offset when pressing a bar, add zoom when pressing a cluster, add a more button effect to the x on the popup.
-// <Text style={{ fontWeight: "bold" }}>✕</Text>
