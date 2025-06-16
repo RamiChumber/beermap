@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { StyleSheet, View, Dimensions, Text, Pressable, Button } from "react-native";
 import Mapbox, { MapView, Camera, ShapeSource, CircleLayer, MarkerView } from "@rnmapbox/maps";
+//import { CloseButton } from "react-bootstrap";
 import osloBarsJson from "./assets/oslo_bars.json";
 
 Mapbox.setAccessToken("pk.eyJ1IjoidHJ1Y2FyIiwiYSI6ImNtYmF4eW1kejBrbngyanNiMDV6cmhkZGUifQ.XDN6-TsN4oQ8jhiwd1Oguw");
@@ -50,19 +51,31 @@ const App = () => {
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
   const mapRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const shapeSourceRef = useRef<Mapbox.ShapeSource>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(12);
-
-
-
   
   useEffect(() => {
     Mapbox.setTelemetryEnabled(false);
   }, []);
 
-  function zoomInCluster(coordinate: Object): void {
-    console.log("Zooming?");
-    
+  function zoomInOnCluster(coords: [number, number], zoom: number): void {
+    cameraRef.current?.setCamera({
+      centerCoordinate: coords,
+      zoomLevel: zoom,
+      animationDuration: 500,
+      animationMode: "flyTo",
+    });
   }
+
+  function flyToPoint(coords: [number, number], zoom: number): void {
+    cameraRef.current?.setCamera({
+      centerCoordinate: coords,
+      zoomLevel: zoom,
+      animationDuration: 300,
+      animationMode: "flyTo",
+    });
+  }
+
 
 
   return (
@@ -91,25 +104,25 @@ const App = () => {
 
           <ShapeSource 
             id="geojson-source"
+            ref={shapeSourceRef}
+            
             shape={geojson}
             cluster={true}
-            clusterRadius={50}
+            clusterRadius={20}
             onPress={async (e) => {
               const feature = e.features?.[0];
               const coords: [number, number] = [e.coordinates.longitude, e.coordinates.latitude];
+              
               if (feature?.properties?.cluster) {
-                zoomInCluster(e.coordinates);
-                const newZoom = Math.min(currentZoom + 2, 20);
-                cameraRef.current?.setCamera({
-                  centerCoordinate: coords,
-                  zoomLevel: newZoom,
-                  animationDuration: 400,
-                  animationMode: "flyTo",
-                });
-                
+                const zoom = await shapeSourceRef.current?.getClusterExpansionZoom(feature);
+                if (zoom) {
+                  zoomInOnCluster(coords, zoom)
+                }
               } else if (feature) {
                 if (mapRef.current && feature.geometry.type === "Point") {
-                  cameraRef.current?.flyTo(coords, 300);
+                  console.log(currentZoom)
+                  flyToPoint(coords, Math.min(currentZoom+1, 19));
+                  console.log(currentZoom)
 
                   setTimeout(async () => {
                     if (mapRef.current) {
@@ -120,16 +133,13 @@ const App = () => {
                     }
                   }, 350); // matches camera animation time
                   
-                  //const screenPoint = await mapRef.current.getPointInView(coords);
-                  //const [x, y] = screenPoint as [number, number];
-
-                  //setPopupPosition({ x, y });
                 }
               }
             }}
 
             hitbox={{ width: 20, height: 20 }}
           >
+
             <CircleLayer
               id="unclusteredPoints"
               filter={['!', ['has', 'point_count']]} // show only unclustered points
@@ -148,6 +158,7 @@ const App = () => {
                 circleColor: "#ff0000",
               }}
             />
+
           </ShapeSource>
         </MapView>
 
@@ -170,7 +181,7 @@ const App = () => {
               <Button onPress={() => {
                 setSelectedFeature(null);
                 setPopupPosition(null);
-              }} title="X"/>
+              }} title="x"/>
             
           </View>
           <Text>{selectedFeature.properties?.outdoor_seating}</Text>
